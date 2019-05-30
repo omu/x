@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+readonly PROGNAME=${0##*/}
+
+readonly DOCPATH=${DOCPATH:-${XDG_DATA_HOME:-$HOME/.local/share}}
+readonly DOCEXT=${DOCEXT:-md}
+
+declare -ag doc_pager=()
+declare -g  doc_topic=
+declare -ag doc_paths=()
+
+cry() {
+	echo "$@" >&2
+}
+
+die() {
+	cry "$@"
+	exit 1
+}
+
+initialize() {
+	if [[ -n ${DOCPAGER:-} ]] && command -v "${DOCPAGER}" &>/dev/null; then
+		# shellcheck disable=2086
+		mapfile -t doc_pager < <(echo $DOCPAGE)
+	elif command -v bat &>/dev/null; then
+		doc_pager=(bat --paging always)
+	elif command -v less &>/dev/null; then
+		cry "W: Using 'less' as the doc_pager.  Installing 'bat' is highly recommended."
+		doc_pager=(less)
+	elif command -v more &>/dev/null; then
+		cry "W: Using 'more' as the doc_pager.  Installing 'bat' and 'less' is highly recommended."
+		doc_pager=(more)
+	else
+		cry "W: Using 'cat' as the doc_pager.  Installing 'bat' and 'less' is highly recommended."
+		doc_pager=(cat)
+	fi
+}
+
+setup_doc_paths() {
+	local -a unverified_doc_paths
+
+	IFS=':'
+	# shellcheck disable=2206
+	unverified_doc_paths=($DOCPATH)
+	unset IFS
+
+	local dir
+	for dir in "${unverified_doc_paths[@]}"; do
+		[[ -d $dir ]] || continue
+
+		doc_paths+=("$dir")
+	done
+}
+
+match_exact() {
+	local dir
+
+	for dir in "${doc_paths[@]}"; do
+		local try=$dir/$doc_topic.$DOCEXT
+
+		if [[ -f $try ]]; then
+			echo "$try"
+			return
+		fi
+	done
+}
+
+match_almost_exact() {
+	local try=$doc_topic.$DOCEXT
+
+	find "${doc_paths[@]}" -type f -path "*$try" 2>/dev/null
+}
+
+match_word() {
+	find "${doc_paths[@]}" -type f -name "*.$DOCEXT" -print 2>/dev/null |
+	grep -w "$doc_topic"
+}
+
+match_readme() {
+	local here=$PWD
+
+	while [[ $here != / ]]; do
+		local try=$here/README.$DOCEXT
+
+		if [[ -f $try ]]; then
+			echo "$try"
+			return
+		fi
+
+		here=${here%/*}
+	done
+}
+
+try() {
+	local strategy=$1
+
+	local found
+	found=$($strategy | LC_COLLATE=C sort | head -n 1) || true
+
+	echo "${found:-}"
+
+	[[ -n ${found:-} ]]
+}
+
+locate_document() {
+	setup_doc_paths
+
+	local doc
+
+	doc=$(try match_exact) || doc=$(try match_almost_exact) || doc=$(try match_word) ||
+		die "E: No suitable document found for $doc_topic inside DOCPATH $DOCPATH."
+
+	export DOCFILE=$doc
+}
+
+locate_readme() {
+	local doc
+
+	doc=$(try match_readme) || die "E: No README found along the parent directories."
+
+	export DOCFILE=$doc
+}
+
+main() {
+	[[ $# -le 1 ]] || die "Usage: $PROGNAME [doc_topic]"
+
+	readonly doc_topic=${1:-}
+
+	initialize
+
+	if [[ -n ${doc_topic:-} ]]; then
+		locate_document
+	else
+		locate_readme
+	fi
+
+	exec "${doc_pager[@]}" "$DOCFILE"
+}
+
+main "$@"

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+readonly PROGNAME=${0##*/}
+
+die() {
+	echo >&2 "$@"
+	exit 1
+}
+
+[[ $#    -ne 0 ]] || die "Usage: $PROGNAME hostname"
+[[ $EUID -eq 0 ]] || die "Root privileges required"
+
+main() {
+	local old_hostname new_hostname
+
+	new_hostname=$1
+	old_hostname=$(hostname)
+
+	hostnamectl set-hostname "$new_hostname"
+	sed -i -e 's/\(127[.]0[.]1[.]1\s\+\)'"$old_hostname"'/\1'"$new_hostname"'/g' /etc/hosts
+}
+
+main "$@"

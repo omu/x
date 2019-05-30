@@ -1,0 +1,148 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'open3'
+require 'tmpdir'
+require 'yaml'
+
+FILEFILE = '.gitimport'
+
+module Shell
+  Result = Struct.new :args, :out, :err, :exit_code do
+    def outline
+      out.first
+    end
+
+    # :reek:NilCheck
+    def ok?
+      exit_code&.zero?
+    end
+
+    def notok?
+      !ok?
+    end
+
+    def command
+      args.join ' '
+    end
+  end
+
+  # Adapted to popen3 from github.com/mina-deploy/mina
+  class Runner
+    def initialize
+      @coathooks = 0
+    end
+
+    def run(*args)
+      return dummy_result if args.empty?
+
+      out, err, status =
+        Open3.popen3(*args) do |_, stdout, stderr, wait_thread|
+          block(stdout, stderr, wait_thread)
+        end
+      Result.new args, out, err, status.exitstatus
+    end
+
+    private
+
+    attr_reader :coathooks
+
+    def block(stdout, stderr, wait_thread)
+      # Handle `^C`
+      trap('INT') { handle_sigint(wait_thread.pid) }
+
+      out = stdout.readlines.map(&:chomp)
+      err = stderr.readlines.map(&:chomp)
+
+      [out, err, wait_thread.value]
+    end
+
+    def handle_sigint(pid)
+      message, signal = message_and_signal
+      warn "\n" + message
+      ::Process.kill signal, pid
+      @coathooks += 1
+    rescue Errno::ESRCH
+      warn 'No process to kill.'
+    end
+
+    def message_and_signal
+      if coathooks > 1
+        ['SIGINT received again. Force quitting...', 'KILL']
+      else
+        ['SIGINT received.', 'TERM']
+      end
+    end
+  end
+
+  module_function
+
+  def run(args, msg = nil)
+    warn msg if msg
+    Runner.new.run(*args)
+  end
+
+  def run_or_die(args, msg = nil)
+    result = run(args, msg)
+    result.ok? || abort("Command failed with exit code #{result.exit_code}: #{result.command}")
+    result
+  end
+end
+
+module Git
+  module_function
+
+  def toplevel
+    build %w[rev-parse --show-toplevel]
+  end
+
+  def inside_work_tree
+    build %w[rev-parse --is-inside-work-tree]
+  end
+
+  def clone(remote, destination = '.')
+    build ['clone', remote, destination]
+  end
+
+  def check_ignore(pathname, *pathnames)
+    build %W[check-ignore -q --no-index #{pathname}] + pathnames
+  end
+
+  class << self
+    private
+
+    def build(args)
+      ['git', *args]
+    end
+  end
+end
+
+def main # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+  Shell.run(Git.inside_work_tree).ok? || abort('Must be inside a Git worktree')
+
+  Dir.chdir(Shell.run_or_die(Git.toplevel).outline) do
+    File.exist?(FILEFILE) || abort("No #{FILEFILE} found.")
+
+    origdir  = Dir.pwd
+    filefile = YAML.load_file(FILEFILE)
+
+    filefile.each do |entry|
+      remote, files = entry['remote'], entry['files']
+
+      Dir.chdir(Dir.mktmpdir) do
+        Shell.run_or_die(Git.clone(remote), "====> Fetching #{remote}...")
+
+        files.each do |file|
+          source, target = file['source'], file['target']
+          destination = File.join(origdir, target)
+          FileUtils.mkdir_p File.dirname(destination)
+          warn "#{source} -> #{destination}"
+          FileUtils.cp_r source, destination
+        end
+      end
+    end
+  end
+end
+
+main

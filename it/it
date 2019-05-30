@@ -1,0 +1,649 @@
+#!/usr/bin/env bash
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+# Common utils and variables
+
+readonly PROGNAME=${0##*/}
+
+bold()   { echo -e "\\e[1;38;5;255m$*\\e[0m"; }
+dim()    { echo -e "\\e[2m$*\\e[0m";          }
+red()    { echo -e "\\e[1;38;5;198m$*\\e[0m"; }
+yellow() { echo -e "\\e[1;38;5;226m$*\\e[0m"; }
+cyan()   { echo -e "\\e[1;38;5;87m$*\\e[0m";  }
+
+cry()    { echo -e >&2 "$*";                }
+die()    { cry "$(red "$*")"; exit 1;       }
+
+report() {
+	local err=$1
+	local msg=$2
+
+	local flag=✓
+	if [[ $err -ne 0 ]]; then
+		flag=✗
+	fi
+
+	cry "$(cyan "$flag")  $msg"
+
+	# shellcheck disable=2086
+	return $err
+}
+
+[[ ${BASH_VERSION%%.*} -ge 4 ]] || die "Bash version 4 or higher required"
+
+shopt -s nullglob
+
+dry() {
+	if [[ ${DRY_RUN:-false} = true ]]; then
+		local prog
+		for prog in "$@"; do
+			eval -- "$prog() { echo $prog \$* >&2; }"
+		done
+	fi
+}
+
+has_func() {
+	[[ $(type -t "$1" || true) == function ]]
+}
+
+# Command handling
+
+declare -Ag command
+
+command.load() {
+	local name=$1
+
+	local func=command:$name
+	has_func "$func" || die "No such command: $name"
+
+	"$func"
+}
+
+command.call() {
+	command.load "$1"
+
+	if has_func initialize; then
+		if has_func shutdown; then
+			trap 'shutdown $?' EXIT HUP INT QUIT TERM
+		fi
+		initialize "$@"
+	fi
+
+	shift
+	call "$@"
+}
+
+command.fuzzy_call() {
+	local may=$1
+	shift
+
+	local found
+
+	local name
+	for name in "${!command[@]}"; do
+		case $name in
+		$may*)
+			found=$name
+			break
+			;;
+		esac
+	done
+
+	[[ -n ${found:-} ]] || die "No command found for: $may"
+	command.call "$found" "$@"
+}
+
+command.print() {
+	local name
+	for name in "${!command[@]}"; do
+		printf '%-12s %s\n' "$name" "${command[$name]-}"
+	done
+}
+
+command[help]='display help'
+command:help() {
+	unset -f initialize shutdown
+
+	call() {
+		if [[ $# -eq 0 ]]; then
+			echo "Usage: $PROGNAME COMMAND [ARGS...]"
+			echo
+			echo "Commands:"
+			echo
+			command.print | sed 's/^/\t/'
+			echo
+			echo "Run '$PROGNAME help COMMAND' to display synopsis for COMMAND."
+		else
+			command.load "$1"
+			help
+		fi >&2
+
+		echo -e "\\nSee $PROGNAME(1) for details." >&2
+	}
+}
+
+# Sequencer
+
+declare -A sequencer
+
+sequencer[date]=sequence_date
+
+sequence_date() {
+	readonly date_fmt='%Y%m%d-%H%M%S-%N'
+
+	iterations() {
+		iterations_unsorted
+	}
+
+	next() {
+		date +"$date_fmt"
+	}
+}
+
+sequencer[nato]=sequence_nato
+
+sequence_nato() {
+	readonly -A nato=(
+		[none]=alpha
+
+		[alpha]=bravo
+		[bravo]=charlie
+		[charlie]=delta
+		[delta]=echo
+		[echo]=foxtrot
+		[foxtrot]=golf
+		[golf]=hotel
+		[hotel]=india
+		[india]=juliet
+		[juliet]=kilo
+		[kilo]=lima
+		[lima]=mike
+		[mike]=november
+		[november]=oscar
+		[oscar]=papa
+		[papa]=quebec
+		[quebec]=romeo
+		[romeo]=sierra
+		[sierra]=tango
+		[tango]=uniform
+		[uniform]=victor
+		[victor]=whiskey
+		[whiskey]=xray
+		[xray]=yankee
+		[yankee]=zulu
+		[zulu]=alpha
+	)
+
+	iterations() {
+		iterations_unsorted | sort -t- -k2
+	}
+
+	next() {
+		local last
+
+		last=$(iterations | tail -n1 | cut -d- -f1)
+		[[ -n $last ]] || last=none
+
+		local name suffix
+
+		name=${nato[$last]}
+		suffix=$(printf '%x' "$(date +'%s')")
+
+		printf '%s-%s\n' "$name" "$suffix"
+	}
+}
+
+enable_sequencer() {
+	local theme=$1
+	local enabled=${sequencer[$theme]-}
+
+	[[ -n $enabled ]] || die "No such sequence theme: $theme"
+
+	"$enabled"
+}
+
+# Git utils
+
+require_inside_sane_work_tree() {
+	git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+		die "Must be inside a git work tree"
+	git rev-parse --verify HEAD >/dev/null ||
+		die "Unverified HEAD"
+}
+
+is_clean_work_tree() {
+	git rev-parse --verify HEAD >/dev/null &&
+	git update-index -q --ignore-submodules --refresh &&
+	git diff-files --quiet --ignore-submodules &&
+	git diff-index --cached --quiet --ignore-submodules HEAD --
+}
+
+require_clean_work_tree() {
+	is_clean_work_tree || die "Must be inside a clean git work tree"
+}
+
+require_toplevel_directory() {
+	pushd "$(
+		dir=$(git rev-parse --git-dir) && dir=$(cd "$dir" && pwd)/ && echo "${dir%%/.git/*}"
+	)" >/dev/null
+}
+
+auto_commit() {
+	if ! is_clean_work_tree; then
+		git commit -q -a -m "${config[auto_commit_message]-}" &>/dev/null
+		cry "$(bold "Changes auto committed.")"
+	fi
+}
+
+checkout_starting_branch() {
+	git checkout -q "${config[branch_current]}"
+}
+
+# Internal
+
+declare -A config=(
+	[prefix_path]=_
+	[prefix_branch]=_
+	[branch_current]=master
+	[iteration_template]=master
+	[manual_commit]=""
+	[auto_commit_message]=.
+	[sequence_theme]=nato
+)
+
+declare -ag cleanup_branches=()
+declare -g iterations_path
+declare -g old_branch
+
+configure() {
+	iterations_path=$(readlink -m "${config[prefix_path]}")
+	old_branch=$(current_branch)
+
+	enable_sequencer "${config[sequence_theme]}"
+}
+
+initialize() {
+	require_inside_sane_work_tree
+	require_toplevel_directory
+
+	[[ $1 =~ "init" ]] || has_inited || die "Repository must be be initialized"
+
+	configure
+
+	if [[ -z ${config[manual_commit]-} ]]; then
+		auto_commit
+	else
+		require_clean_work_tree
+	fi
+
+	checkout_starting_branch
+}
+
+shutdown() {
+	local err=${1:-0}
+
+	if [[ ${#cleanup_branches[@]} -ne 0 ]]; then
+		git branch -D "${cleanup_branches[@]}" &>/dev/null || true
+	fi
+
+	return "$err"
+}
+
+has_branch() {
+	git show-branch "$1" &>/dev/null
+}
+
+current_branch() {
+	git symbolic-ref --short HEAD
+}
+
+to_branch() {
+	echo "${config[prefix_branch]}/$1"
+}
+
+to_path() {
+	echo "$iterations_path/$1"
+}
+
+to_s() {
+	echo "${config[prefix_branch]}/$1"
+}
+
+iterations_unsorted() {
+	git for-each-ref --format='%(refname:lstrip=3)' \
+		refs/heads/"${config[prefix_branch]}" 2>/dev/null |
+		grep -E -v "${config[iteration_template]}" || true
+}
+
+snapshot() {
+	local iteration
+	local branch
+
+	iteration=$(next)
+
+	branch=$(to_branch "$iteration")
+	git branch "$branch" "${config[branch_current]}" >/dev/null
+
+	echo "$iteration"
+}
+
+substitute_absolute_with_relative() {
+	local absolute_path=$1 target=$2 relative_path
+
+	relative_path=$(realpath --relative-to "$PWD" "$absolute_path") || die "realpath failed with $?"
+
+	[[ -w $target ]] || die "Readonly file when fixing absolute paths: $target."
+	sed -E -i "s!$absolute_path!$relative_path!" "$target" || die "sed failed with $?"
+}
+
+fix_absolute_paths() {
+	local path=$1
+	local branch=$2
+
+	local worktree=${branch##*/} absolute_path relative_path
+
+	local target=.git/worktrees/$worktree/gitdir
+	if [[ ! -f $target ]]; then
+		cry "Missing file when fixing absolute paths: $target."
+		return 1
+	fi
+
+	absolute_path=$(<"$target")
+	substitute_absolute_with_relative "$absolute_path" "$target"
+
+	local target=$path/.git
+	if [[ ! -f $target ]]; then
+		cry "Missing file when fixing absolute paths: $target."
+		return 1
+	fi
+
+	absolute_path=$(sed -E 's!^[^:]+: !!' "$target") || die "sed failed with $?"
+	substitute_absolute_with_relative "$absolute_path" "$target"
+}
+
+fix_iteration() {
+	local iteration=$1
+	local path err=1
+
+	path=$(to_path "$iteration")
+	if [[ -d $path ]]; then
+		local branch
+
+		branch=$(to_branch "$iteration")
+
+		has_branch "$branch" || return 0
+
+		if fix_absolute_paths "$path" "$branch"; then
+			err=0
+		fi
+	fi
+
+	report $err "$(to_s "$iteration")"
+}
+
+splat_iteration() {
+	local iteration=$1
+	local path branch
+
+	path=$(to_path "$iteration")
+	if [[ -d $path ]]; then
+		return 0
+	fi
+
+	branch=$(to_branch "$iteration")
+
+	has_branch "$branch" || return 0
+
+	mkdir -p "$(dirname "$path")"
+	git worktree add -q -f "$path" "$branch" >/dev/null || die "git-worktree failed"
+	fix_absolute_paths "$path" "$branch" || die "Couldnt fix absolute paths: $iteration"
+	cry "$(cyan "✓")  $(to_s "$iteration")"
+}
+
+snapshot_and_splat() {
+	splat_iteration "$(snapshot)"
+}
+
+remove() {
+	local iteration=$1
+	local path branch
+
+	iteration=${iteration##*/}
+
+	path=$(to_path "$iteration")
+	branch=$(to_branch "$iteration")
+
+	rm -rf "$path"
+	git worktree prune
+	! has_branch "$branch" || git branch -q -D "$branch"
+
+	cry "$(cyan "✗")  $(to_s "$iteration")"
+}
+
+temporary_branch() {
+	local branch=${config[prefix_branch]}/temp
+	while true; do
+		if ! has_branch "$branch"; then
+			echo "$branch"
+			return 0
+		fi
+		branch=${config[prefix_branch]}/temp.$RANDOM
+	done
+}
+
+new_child() {
+	local parent=$1
+	local branch
+
+	branch=$(temporary_branch)
+	cleanup_branches+=("$branch")
+
+	snapshot_and_splat
+
+	git checkout -q -b "$branch" "$parent"
+	git branch -M "$branch" "${config[branch_current]}"
+
+}
+
+new_orphan() {
+	local branch
+
+	branch=$(temporary_branch)
+	cleanup_branches+=("$branch")
+
+	snapshot_and_splat
+
+	git checkout -q --orphan "$branch"
+
+	git rm -qrf . && find . -type d -empty -delete
+
+	touch .gitignore
+	git add .gitignore
+
+	git commit -q -a -m "${config[auto_commit_message]-}"
+	git branch -M "$branch" "${config[branch_current]}"
+}
+
+has_inited() {
+	[[ -n $(git config "$PROGNAME".prefixbranch 2>/dev/null || true) ]]
+}
+
+# Commands
+
+# shellcheck disable=2034,2154
+command[init]='Initialize repository'
+command:init() {
+	help() {
+		cry "init [PREFIX]\\ninit PREFIX_PATH PREFIX_BRANCH"
+	}
+
+	call() {
+		! has_inited || cry "Reinitializing repository."
+
+		git config "$PROGNAME".prefixbranch "${config[prefix_branch]}"
+		git config remote.origin.mirror true
+
+		local excludes
+		excludes="$(git rev-parse --absolute-git-dir)"/info/exclude
+
+		if [[ -f $excludes ]]; then
+			if ! grep -E -q "^/${config[prefix_path]}/$" "$excludes"; then
+				cat >>"$excludes" <<-EOF
+					/${config[prefix_path]}/
+				EOF
+			fi
+		else
+			cry "No exclude file found."
+		fi
+
+		local -a iterations
+		mapfile -t iterations < <(iterations)
+
+		local iteration
+		for iteration in "${iterations[@]}"; do
+			splat_iteration "$iteration"
+		done
+
+		splat_iteration "${config[iteration_template]}"
+	}
+}
+
+# shellcheck disable=2034,2154
+command[fix]='Fix absolute paths'
+command:fix() {
+	help() {
+		cry 'fix'
+	}
+
+	call() {
+		local -a iterations
+		mapfile -t iterations < <(iterations)
+
+		local iteration path
+		for iteration in "${iterations[@]}"; do
+			fix_iteration "$iteration" || true
+		done
+	}
+}
+
+# shellcheck disable=2034,2154
+command[list]='List iterations'
+command:list() {
+	help() {
+		cry 'list'
+	}
+
+	call() {
+		local -a iterations
+		mapfile -t iterations < <(iterations)
+
+		local iteration path
+		for iteration in "${iterations[@]}"; do
+			cry "$(bold "$iteration")"
+		done
+	}
+}
+
+# shellcheck disable=2034,2120,2154
+command[new]='Create new iteration'
+command:new() {
+	help() {
+		cry "new\\nnew .|-\\nnew BRANCH_PARENT"
+	}
+
+	call() {
+		local parent=${1:-}
+
+		case $parent in
+		"")
+			new_child "$old_branch"
+			;;
+		.)
+			parent=$(to_branch "${config[iteration_template]}")
+			if has_branch "$parent"; then
+				new_child "$parent"
+			else
+				new_orphan
+			fi
+			;;
+		-)
+			new_orphan
+			;;
+		*)
+			if has_branch "$parent"; then
+				new_child "$parent"
+			else
+				local branch="${config[prefix_branch]}/$parent"
+				has_branch "$branch" || die "No such branch: $parent"
+				new_child "$branch"
+			fi
+			;;
+		esac
+	}
+}
+
+# shellcheck disable=2034,2154
+command[remove]='Remove iteration'
+command:remove() {
+	help() {
+		cry "remove -s|--sync\\nremove ITERATION"
+	}
+
+	call() {
+		local sync
+
+		while :; do
+			case ${1:-} in
+			-s|--sync)
+				shift
+				[[ $# -eq 0 ]] || usage remove
+				sync=true
+				break
+				;;
+			-*)
+				usage remove
+				;;
+			*)
+				break
+				;;
+			esac
+		done
+
+		if [[ -n ${sync:-} ]]; then
+			local -a iterations
+			mapfile -t iterations < <(iterations)
+
+			local iteration path
+			for iteration in "${iterations[@]}"; do
+				path=$(to_path "$iteration")
+				[[ -d $path ]] || remove "$iteration"
+			done
+		elif [[ -n ${1:-} ]]; then
+			remove "$1"
+		else
+			usage remove
+		fi
+	}
+}
+
+# shellcheck disable=2034,2154
+command[template]='Set template'
+command:template() {
+	help() {
+		cry 'template'
+	}
+
+	call() {
+		remove "${config[iteration_template]}"
+		git branch -q "$(to_branch "${config[iteration_template]}")"
+		splat_iteration "${config[iteration_template]}"
+	}
+}
+
+main() {
+	[[ $# -eq 0 ]] || command.fuzzy_call "$@"
+	[[ $# -ne 0 ]] || command.call help
+}
+
+main "$@"

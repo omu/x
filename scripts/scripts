@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+readonly SCRIPTS_REPOSITORY=${SCRIPTS_REPOSITORY:-github.com/omu/debian}
+readonly SCRIPTS_PATH=${SCRIPTS_PATH:-lib/scripts}
+readonly SCRIPTS_BRANCH=${SCRIPTS_BRANCH:-master}
+
+export SCRIPTS_BRANCH
+
+if command -v she &>/dev/null; then
+	# shellcheck disable=1090
+	source <(env she src)
+else
+	# shellcheck disable=1090
+	source <(curl -fsSL https://she.alaturka.io/source) -boot
+fi
+
+[[ ${EUID:-} -eq 0 ]] || die "Root privileges required"
+
+main() {
+	local -a scripts=() variables=()
+
+	while [[ $# -gt 0 ]]; do
+		if [[ "$1" =~ [a-zA-Z_][a-zA-Z0-9_]*= ]]; then
+			variables+=("$1")
+		else
+			scripts+=("$1")
+		fi
+		shift
+	done
+
+	[[ ${#scripts[@]} -gt 0 ]] || die "No script given"
+
+	enter "$SCRIPTS_REPOSITORY"/"$SCRIPTS_PATH"
+		paths ../../bin
+
+		local name
+		for name in "${scripts[@]}"; do
+			case $name in
+			*/*) try "${variables[@]}" "$name"   ;;
+			*)   try "${variables[@]}" "_/$name" ;;
+			esac
+		done
+	leave
+}
+
+main "$@"

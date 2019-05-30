@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+readonly PROGNAME=${0##*/}
+
+declare -agr hooks=(
+	pre-rebase
+	pre-commit
+	post-commit
+	post-receive
+	commit-msg
+	pre-push
+	post-push
+	applypatch-msg
+	post-checkout
+	post-merge
+	pre-receive
+	prepare-commit-msg
+	pre-auto-gc
+	post-update
+	update
+	post-applypatch
+	push-to-checkout
+	post-rewrite
+	pre-applypatch
+	fsmonitor-watchman
+	sendemail-validate
+	p4-pre-submit
+)
+
+declare -agr confdirs=(
+	/etc/git                                # per system (global)
+	"${XDG_CONFIG_HOME:-$HOME/.config}"/git # per user
+	.git                                    # per project
+)
+
+declare -ag enabled=()
+
+die() {
+	echo >&2 "$@"
+	exit 1
+}
+
+initialize() {
+	shopt -s nullglob
+
+	mapfile -t enabled < <(
+		git config --get-all hooks.enable 2>/dev/null || true
+	)
+}
+
+enabled() {
+	local pattern
+
+	for pattern in "${enabled[@]}"; do
+		echo "$pattern"
+	done
+}
+
+run_hook() {
+	local hook=$1
+	shift
+
+	if [[ -f $hook ]] && [[ -x $hook ]]; then
+		local name=${hook##*/}
+		name=${name#[0-9]*-}
+
+		if grep -q -F -f <(enabled) "$name"; then
+			"$hook" "$@"
+		fi
+	fi
+}
+
+run_hooks() {
+	local dir=$1
+	shift
+
+	local name=$1
+	shift
+
+	local hook
+	if [[ -d $dir/$name.d ]]; then
+		for hook in "$dir/$name".d/*; do
+			run_hook "$hook" "$@"
+		done
+	else
+		hook=$dir/$name
+		run_hook "$hook" "$@"
+	fi
+}
+
+install() {
+	local prefix=$1
+
+	[[ $EUID -eq 0 ]] || die "Root privileges required"
+
+	local self
+	self=$(readlink -f "${BASH_SOURCE[0]}")
+
+	[[ $self = $prefix/bin ]] || cp "$self" "$prefix/bin"
+
+	local hooks_path=/etc/git/hooks
+
+	if [[ $(git config --system core.hooksPath 2>/dev/null || true) != "$hooks_path" ]]; then
+		git config --system --type path core.hooksPath "$hooks_path" || die "Can't set git core.hooksPath"
+	fi
+
+	mkdir -p "$hooks_path"
+
+	local hook
+	for hook in "${hooks[@]}"; do
+		local dir=$hooks_path/$hook.d stub=$hooks_path/$hook
+
+		mkdir -p "$dir"
+
+		cat >"$stub" <<-'EOF'
+			#!/bin/sh
+
+			name=${0##*/}
+			runner=$(command -v git-hooks 2>&1)
+
+			[ -z "$runner" ] || exec "$runner" "$name" "$@"
+		EOF
+		chmod +x "$stub"
+	done
+}
+
+run() {
+	local name=$1
+	shift
+
+	initialize
+
+	local dir
+	for dir in "${confdirs[@]}"; do
+		[[ -d $dir/hooks ]] || continue
+
+		run_hooks "$dir"/hooks "$name" "$@"
+	done
+}
+
+main() {
+	[[ $# -gt 0 ]] || die "E: Usage: $PROGNAME --install [prefix] | hookname"
+
+	case $1 in
+	--install|-install)
+		local prefix=${2:-/usr/local}
+
+		install "$prefix"
+		;;
+	*)
+		run "$@"
+		;;
+	esac
+}
+
+main "$@"

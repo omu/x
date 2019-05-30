@@ -1,0 +1,58 @@
+.\" generated with Ronn/v0.7.3
+.\" http://github.com/rtomayko/ronn/tree/0.7.3
+.
+.TH "IT" "1" "March 2018" "" ""
+.
+.SH "NAME"
+\fBit\fR \- kod iterasyonları
+.
+.SH "SYNOPSIS"
+\fBit\fR \fIkomut\fR [\fIargüman\fR\.\.\.]
+.
+.br
+.
+.SH "DESCRIPTION"
+\fBIt\fR iteratif çalışmayı destekleyen bir geliştirme aracıdır\. Git deposunda güncel iterasyon daima \fBmaster\fR dalında bulunur\. Yeni bir iterasyon öncesinde güncel iterasyon zaman damgalı ve (öntanımlı olarak) mnemonik bir isimle oluşturulan yeni bir dala kaydedilir\. Yeni iterasyon öksüz veya isteğe bağlı olarak şablon bir daldan oluşturularak \fBmaster\fR dalına alınır\. Eski iterasyonlar dosya sistemi üzerinden kolayca geçiş yapabilmek için proje kökünde oluşturulan bir dizin ağacına açılır\.
+.
+.SH "COMMANDS"
+.
+.TP
+\fBinit\fR
+İterasyonlar için depoyu ilkle\.
+.
+.TP
+\fBnew\fR
+Yeni iterasyon oluştur\.
+.
+.TP
+\fBremove\fR
+İterasyonu sil\.
+.
+.TP
+\fBlist\fR
+İterasyonları listele\.
+.
+.TP
+\fBtemplate\fR
+Mevcut dalı iterasyon şablonu olarak ayarla\.
+.
+.TP
+\fBhelp\fR
+Kısa yardım görüntüle\.
+.
+.SH "EXAMPLES"
+.
+.SH "BUGS"
+\fBIt\fR git(1) ve git\-worktree(1) etrafında Bash 4 ile yazılan, görece taşınabilir nitelikte bir kabuk betiği olmakla birlikte adı geçen araçlar her ortamda bulunmayabilir\.
+.
+.P
+\fBIt\fR temelde Git\'i sarmalayan bir program olduğundan sarmalayıcı programlara özgü zaaflar sergileyebilir\.
+.
+.P
+\fBIt\fR her git\-push işleminde uzaktaki depoya "force" ederek yazar\. Bu nedenle aracı "production" depolarda doğrudan kullanmayın\. Deponun mutlaka bir kopyasını alarak, kişisel kopyanız üzerinde çalışın\.
+.
+.SH "COPYRIGHT"
+It Copyright (C) 2018 Recai Oktaş \fIhttp://r\.oktas\.us\fR
+.
+.SH "SEE ALSO"
+git\-worktree(1), git(1)

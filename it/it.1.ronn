@@ -1,0 +1,59 @@
+it(1) -- kod iterasyonları
+==========================
+
+## SYNOPSIS
+
+`it` <komut> [<argüman>...]<br>
+
+## DESCRIPTION
+
+**It** iteratif çalışmayı destekleyen bir geliştirme aracıdır.  Git deposunda
+güncel iterasyon daima `master` dalında bulunur.  Yeni bir iterasyon öncesinde
+güncel iterasyon zaman damgalı ve (öntanımlı olarak) mnemonik bir isimle
+oluşturulan yeni bir dala kaydedilir.  Yeni iterasyon öksüz veya isteğe bağlı
+olarak şablon bir daldan oluşturularak `master` dalına alınır.  Eski
+iterasyonlar dosya sistemi üzerinden kolayca geçiş yapabilmek için proje kökünde
+oluşturulan bir dizin ağacına açılır.
+
+## COMMANDS
+
+  * `init`:
+    İterasyonlar için depoyu ilkle.
+
+  * `new`:
+    Yeni iterasyon oluştur.
+
+  * `remove`:
+    İterasyonu sil.
+
+  * `list`:
+    İterasyonları listele.
+
+  * `template`:
+    Mevcut dalı iterasyon şablonu olarak ayarla.
+
+  * `help`:
+    Kısa yardım görüntüle.
+
+## EXAMPLES
+
+## BUGS
+
+**It** git(1) ve  git-worktree(1) etrafında Bash 4 ile yazılan, görece
+taşınabilir nitelikte bir kabuk betiği olmakla birlikte adı geçen araçlar her
+ortamda bulunmayabilir.
+
+**It** temelde Git'i sarmalayan bir program olduğundan sarmalayıcı programlara
+özgü zaaflar sergileyebilir.
+
+**It** her git-push işleminde uzaktaki depoya "force" ederek yazar.  Bu nedenle
+aracı "production" depolarda doğrudan kullanmayın.  Deponun mutlaka bir
+kopyasını alarak, kişisel kopyanız üzerinde çalışın.
+
+## COPYRIGHT
+
+It Copyright (C) 2018 Recai Oktaş <http://r.oktas.us>
+
+## SEE ALSO
+
+git-worktree(1), git(1)
