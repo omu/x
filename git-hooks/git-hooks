@@ -98,7 +98,7 @@ install() {
 	local self
 	self=$(readlink -f "${BASH_SOURCE[0]}")
 
-	[[ $self = $prefix/bin ]] || cp "$self" "$prefix/bin"
+	[[ ${self%/*} = $prefix/bin ]] || cp "$self" "$prefix/bin"
 
 	local hooks_path=/etc/git/hooks
 
