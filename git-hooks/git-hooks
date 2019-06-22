@@ -31,7 +31,7 @@ declare -agr hooks=(
 
 declare -agr confdirs=(
 	/etc/git                                # per system (global)
-	"${XDG_CONFIG_HOME:-$HOME/.config}"/git # per user
+	"${XDG_CONFIG_HOME:-~/.config}"/git     # per user
 	.git                                    # per project
 )
 
