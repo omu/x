@@ -134,7 +134,9 @@ def main # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
         Shell.run_or_die(Git.clone(remote), "====> Fetching #{remote}...")
 
         files.each do |file|
-          source, target = file['source'], file['target']
+          source = file['source']
+          target = file['target'] || source
+
           destination = File.join(origdir, target)
           FileUtils.mkdir_p File.dirname(destination)
           warn "#{source} -> #{destination}"
