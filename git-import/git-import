@@ -101,8 +101,8 @@ module Git
     build %w[rev-parse --is-inside-work-tree]
   end
 
-  def clone(remote, destination = '.')
-    build ['clone', remote, destination]
+  def clone(remote, destination = '.', branch: nil)
+    branch ? build(['clone', '--branch', branch, remote, destination]) : build(['clone', remote, destination])
   end
 
   def check_ignore(pathname, *pathnames)
@@ -128,10 +128,10 @@ def main # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
     filefile = YAML.load_file(FILEFILE)
 
     filefile.each do |entry|
-      remote, files = entry['remote'], entry['files']
+      remote, branch, files = entry['remote'], entry['branch'], entry['files']
 
       Dir.chdir(Dir.mktmpdir) do
-        Shell.run_or_die(Git.clone(remote), "====> Fetching #{remote}...")
+        Shell.run_or_die(Git.clone(remote, branch: branch), "====> Getting #{remote}...")
 
         files.each do |file|
           source = file['source']
