@@ -1,8 +1,11 @@
 package usl
 
-import (
-	"testing"
-)
+import "testing"
+
+type testCase struct {
+	in  string
+	out map[string]string
+}
 
 func TestParse(t *testing.T) {
 	t.Parallel()
@@ -184,7 +187,7 @@ func TestParse(t *testing.T) {
 	}
 
 	for name, ts := range tests {
-		ts := ts
+		ts := ts // https://github.com/golang/go/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			for _, tc := range ts {
@@ -207,9 +210,4 @@ func TestParse(t *testing.T) {
 			}
 		})
 	}
-}
-
-type testCase struct {
-	in  string
-	out map[string]string
 }
