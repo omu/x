@@ -13,8 +13,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v1
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v1
         working-directory: usl
+        uses: goreleaser/goreleaser-action@v1
         with:
           version: latest
           args: release
