@@ -5,6 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
+	"golang.org/x/crypto/ssh/terminal"
+
 	"github.com/omu/zoo/usl"
 )
 
@@ -30,7 +33,7 @@ func Dump(us *usl.USL, attributes ...string) {
 
 	for _, attribute := range wanted(ks, attributes...) {
 		if value, ok := m[attribute]; ok && value != "" {
-			fmt.Printf("%-16s %s\n", attribute, value)
+			fmt.Printf("%-24s %s\n", color.New(color.FgCyan, color.Bold).Sprint(attribute), value)
 		}
 	}
 }
@@ -50,6 +53,10 @@ func Print(us *usl.USL, attributes ...string) {
 }
 
 func main() {
+	if !terminal.IsTerminal(int(os.Stdout.Fd())) {
+		color.NoColor = true
+	}
+
 	if len(os.Args) < 2 {
 		die(usage)
 	}
