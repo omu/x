@@ -1,98 +1,221 @@
 package usl
 
-import "testing"
+import (
+	"testing"
+)
 
-var tests = []struct {
-	in       string
-	expected map[string]string
-	out      string
-}{
-	{
-		"https://github.com/user/repo", map[string]string{
-			"class":  "git",
-			"inpath": "",
-			"name":   "user/repo",
-			"ref":    "",
-			"scheme": "https",
-		}, "https://github.com/user/repo.git",
-	},
-	{
-		"github.com/user/repo", map[string]string{
-			"class":  "git",
-			"inpath": "",
-			"name":   "user/repo",
-			"ref":    "",
-			"scheme": "https",
-		}, "https://github.com/user/repo.git",
-	},
-	{
-		"github.com:user/repo", map[string]string{
-			"class":    "git",
-			"inpath":   "",
-			"name":     "user/repo",
-			"ref":      "",
-			"scheme":   "ssh",
-			"username": "git",
-		}, "git@github.com:user/repo.git",
-	},
-	{
-		"git@github.com:user/repo", map[string]string{
-			"class":    "git",
-			"inpath":   "",
-			"name":     "user/repo",
-			"ref":      "",
-			"scheme":   "ssh",
-			"username": "git",
-		}, "git@github.com:user/repo.git",
-	},
+func TestSchemelessUsual(t *testing.T) {
+	test(t, []testCase{
+		testCase{
+			"github.com/user/repo", map[string]string{
+				"source": "https://github.com/user/repo.git",
+
+				"class":  "git",
+				"inpath": "",
+				"name":   "user/repo",
+				"ref":    "",
+				"scheme": "https",
+			},
+		},
+		testCase{
+			"github.com/user/repo@unstable", map[string]string{
+				"source": "https://github.com/user/repo.git",
+
+				"class":  "git",
+				"inpath": "",
+				"name":   "user/repo",
+				"ref":    "unstable",
+				"scheme": "https",
+			},
+		},
+		testCase{
+			"github.com/user/repo/a/b@unstable", map[string]string{
+				"source": "https://github.com/user/repo.git",
+
+				"class":  "git",
+				"inpath": "a/b",
+				"name":   "user/repo",
+				"ref":    "unstable",
+				"scheme": "https",
+			},
+		},
+		testCase{
+			"github.com/user/repo.git/a/b", map[string]string{
+				"source": "https://github.com/user/repo.git",
+
+				"class":  "git",
+				"inpath": "a/b",
+				"name":   "user/repo",
+				"ref":    "",
+				"scheme": "https",
+			},
+		},
+	})
 }
 
-func TestParse(t *testing.T) {
-	for _, sample := range tests {
-		got, err := Parse(sample.in)
+func TestSchemelessSSH(t *testing.T) {
+	test(t, []testCase{
+		testCase{
+			"github.com:user/repo", map[string]string{
+				"source": "git@github.com:user/repo.git",
+
+				"class":    "git",
+				"inpath":   "",
+				"name":     "user/repo",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "git",
+			},
+		},
+		testCase{
+			"git@github.com:user/repo", map[string]string{
+				"source": "git@github.com:user/repo.git",
+
+				"class":    "git",
+				"inpath":   "",
+				"name":     "user/repo",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "git",
+			},
+		},
+		testCase{
+			"user@example.com:a/b", map[string]string{
+				"source": "user@example.com:a/b",
+
+				"class":    "",
+				"inpath":   "",
+				"name":     "a/b",
+				"path":     "a/b",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "user",
+			},
+		},
+	})
+}
+
+func TestSchemelessFile(t *testing.T) {
+	test(t, []testCase{
+		testCase{
+			"./a/b", map[string]string{
+				"source": "a/b",
+
+				"class":    "",
+				"fullpath": "a/b",
+				"scheme":   "file",
+			},
+		},
+		testCase{
+			"../a/b", map[string]string{
+				"source": "../a/b",
+
+				"class":    "",
+				"fullpath": "../a/b",
+				"scheme":   "file",
+			},
+		},
+		testCase{
+			"./a/b.git/x", map[string]string{
+				"source": "a/b.git",
+
+				"class":    "git",
+				"fullpath": "a/b",
+				"inpath":   "x",
+				"scheme":   "file",
+			},
+		},
+	})
+}
+
+func TestSchemeHTTPS(t *testing.T) {
+	test(t, []testCase{
+		testCase{
+			"https://github.com/user/repo", map[string]string{
+				"source": "https://github.com/user/repo.git",
+
+				"class":  "git",
+				"inpath": "",
+				"name":   "user/repo",
+				"ref":    "",
+				"scheme": "https",
+			},
+		},
+	})
+}
+
+func TestSchemeSSH(t *testing.T) {
+	test(t, []testCase{
+		testCase{
+			"ssh://git@github.com/user/repo", map[string]string{
+				"source": "git@github.com:user/repo.git",
+
+				"class":    "git",
+				"inpath":   "",
+				"name":     "user/repo",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "git",
+			},
+		},
+		testCase{
+			"ssh://user:pass@example.com/a/b", map[string]string{
+				"source": "user@example.com:a/b",
+
+				"class":    "",
+				"inpath":   "",
+				"name":     "a/b",
+				"password": "pass",
+				"path":     "/a/b",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "user",
+			},
+		},
+		testCase{
+			"ssh://user:pass@example.com:22/a/b", map[string]string{
+				"source": "ssh://user:pass@example.com:22/a/b",
+
+				"class":    "",
+				"domain":   "example.com",
+				"host":     "example.com:22",
+				"inpath":   "",
+				"name":     "a/b",
+				"password": "pass",
+				"path":     "/a/b",
+				"port":     "22",
+				"ref":      "",
+				"scheme":   "ssh",
+				"username": "user",
+			},
+		},
+	})
+}
+
+type testCase struct {
+	in  string
+	out map[string]string
+}
+
+func test(t *testing.T, cs []testCase) {
+	t.Parallel()
+
+	for _, c := range cs {
+		got, err := Parse(c.in)
+
 		if err != nil {
-			t.Errorf("Parse(%q) = unexpected err %q, want %q", sample.in, err, sample.expected)
+			t.Errorf("Parse(%q) = unexpected err %q", c.in, err)
 			continue
 		}
 
 		m, _ := got.Map()
 
-		for ke, ve := range sample.expected {
+		for ke, ve := range c.out {
 			if va, ok := m[ke]; ok {
 				if ve != va {
-					t.Errorf("Got (%s), expected (%s) for attribute (%s)", va, ve, ke)
-					// t.Errorf("Parse(%q) = %q, want %q", sample.in, got, sample.expected)
+					t.Errorf("\t%40s %-12s\tgot:  %-12s\twant: %-12s", c.in, ke, va, ve)
 				}
-			} else {
-				t.Errorf("Err\n")
 			}
-		}
-
-		if actual := got.String(); sample.out != actual {
-			t.Errorf("Got (%s), expected (%s)", actual, sample.out)
 		}
 	}
 }
-
-// TODO
-// "foo://example.com:8042/over/there?name=ferret#nose",
-// "urn:example:animal:ferret:nose",
-// "jdbc:mysql://test_user:ouupppssss@localhost:3306/sakila?profileSQL=true",
-// "ftp://ftp.is.co.za/rfc/rfc1808.txt",
-// "http://www.ietf.org/rfc/rfc2396.txt#header1",
-// "ldap://[2001:db8::7]/c=GB?objectClass=one&objectClass=two",
-// "mailto:John.Doe@example.com",
-// "news:comp.infosystems.www.servers.unix",
-// "tel:+1-816-555-1212",
-// "telnet://192.0.2.16:80/",
-// "urn:oasis:names:specification:docbook:dtd:xml:4.1.2",
-//
-// "ssh://alice@example.com",
-// "https://bob:pass@example.com/place",
-// "http://example.com/?a=1&b=2+2&c=3&c=4&d=%65%6e%63%6F%64%65%64",
-// "https://github.com/roktas///t.git/a/b@next#issue/12",
-// "file://foo/bar",
-// "./x/y",
-// "example.com:a/b",
-// "./fexample.com:a/b",
-// "any://server.com:a/b",

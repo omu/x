@@ -93,21 +93,21 @@ func (s *Supported) Contains(support string) bool {
 
 // USL should be commented
 type USL struct {
-	in string
+	in string // Raw URL string
 
-	Fragment string // URL
-	Host     string
-	Password string
-	Path     string
-	Port     string
-	Scheme   string
-	User     string
-	Username string
-	Class    string // USL spesific
-	Domain   string
-	InPath   string
-	Name     string
-	Ref      string
+	Class    string // Source class
+	Domain   string // url.URL Host without port
+	Fragment string // url.URL Fragment
+	FullPath string // url.URL Path without leading and trailing slashes
+	Host     string // url.URL Host
+	InPath   string // Relative path after root source
+	Name     string // Name of the source in relative path form
+	Password string // url.Userinfo Password
+	Path     string // url.URL Port
+	Port     string // url.URL Port
+	Ref      string // Git reference (i.e. branch, tag, commit)
+	Scheme   string // url.URL Scheme
+	Username string // url.Userinfo Username
 }
 
 // Parse should be commented
@@ -126,9 +126,17 @@ func Parse(rawurl string) (*USL, error) {
 }
 
 func (us *USL) String() string {
+	if us.Scheme == "file" {
+		if us.Class == "" {
+			return us.Path
+		}
+
+		return us.Path + "." + us.Class
+	}
+
 	var ui string
 
-	if us.Scheme == "ssh" || us.Scheme == "git+ssh" {
+	if us.Scheme == "ssh" && us.Port == "" {
 		if us.Username != "" {
 			ui = us.Username + "@"
 		}
@@ -155,7 +163,7 @@ func (us *USL) String() string {
 	base := us.Scheme + "://" + ui + us.Host
 
 	if us.Class == "" {
-		return base + "/" + us.Path
+		return base + "/" + us.FullPath
 	}
 
 	return base + "/" + us.Name + "." + us.Class
@@ -222,11 +230,14 @@ func (us *USL) compute() error {
 		us.Ref = ref
 	}
 
-	if name, class, inpath, ok := parseClass(us.Path); ok && SupportedClasses.Contains(class) {
-		us.Name = relPath(name)
-		us.InPath = relPath(inpath)
+	if before, class, after, ok := parseClass(us.Path); ok && SupportedClasses.Contains(class) {
+		us.Path = before
+		us.Name = relPath(before)
+		us.InPath = relPath(after)
 		us.Class = class
 	}
+
+	us.FullPath = relPath(us.Path)
 
 	if SupportedProviders.Contains(us.Host) {
 		if us.Class == "" {
@@ -244,7 +255,11 @@ func (us *USL) compute() error {
 		}
 	}
 
-	if us.Ref != "" && us.Class == "" {
+	if us.Name == "" {
+		us.Name = us.FullPath
+	}
+
+	if us.Ref != "" && us.Class != "git" {
 		return fmt.Errorf("malformed url: ref found for non git source: %q", us.in)
 	}
 
@@ -262,7 +277,7 @@ func groupPatternFromSlice(group string, ss []string) string {
 }
 
 func matchFile(in string) (map[string]string, bool) {
-	if strings.HasPrefix(in, "./") || strings.HasPrefix(in, "/") {
+	if strings.HasPrefix(in, "/") || strings.HasPrefix(in, "./") || strings.HasPrefix(in, "../") {
 		return map[string]string{"path": in}, true
 	}
 
@@ -419,16 +434,6 @@ func parseSpecial(in string, match map[string]string) (*url.URL, error) {
 
 	host := match["provider"]
 	path := filepath.Clean(match["path"])
-
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("incomplete repository path %q for provider %q: %q", path, host, in)
-	}
-
-	if repo := parts[1]; !strings.HasSuffix(repo, ".git") {
-		parts[1] = repo + ".git"
-		path = strings.Join(parts, "/")
-	}
 
 	return &url.URL{
 		Host:   host,
