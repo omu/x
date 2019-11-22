@@ -27,9 +27,8 @@ func wanted(defaultAttributes []string, attributes ...string) []string {
 // Dump should be commented
 func Dump(us *usl.USL, attributes ...string) {
 	m, ks := us.Map()
-	wanted := wanted(ks, attributes...)
 
-	for _, attribute := range wanted {
+	for _, attribute := range wanted(ks, attributes...) {
 		if value, ok := m[attribute]; ok && value != "" {
 			fmt.Printf("%-16s %s\n", attribute, value)
 		}
@@ -39,10 +38,9 @@ func Dump(us *usl.USL, attributes ...string) {
 // Print should be commented
 func Print(us *usl.USL, attributes ...string) {
 	m, ks := us.Map()
-	wanted := wanted(ks, attributes...)
 
 	var values []string
-	for _, attribute := range wanted {
+	for _, attribute := range wanted(ks, attributes...) {
 		if value, ok := m[attribute]; ok {
 			values = append(values, value)
 		}
@@ -56,10 +54,7 @@ func main() {
 		die(usage)
 	}
 
-	rawusl := os.Args[1]
-
-	us, err := usl.Parse(rawusl)
-
+	us, err := usl.Parse(os.Args[1])
 	if err != nil {
 		die(err)
 	}

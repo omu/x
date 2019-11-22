@@ -75,7 +75,7 @@ type USL struct {
 	Class    string // Source class
 	Domain   string // url.URL Host without port
 	Fragment string // url.URL Fragment
-	FullPath string // url.URL Path without leading and trailing slashes
+	BasePath string // url.URL Path without leading and trailing slashes
 	Host     string // url.URL Host
 	InPath   string // Relative path after root source
 	Name     string // Name of the source in relative path form
@@ -211,7 +211,7 @@ func (us *USL) String() string {
 	buf.WriteByte('/')
 
 	if us.Class == "" {
-		buf.WriteString(us.FullPath)
+		buf.WriteString(us.BasePath)
 	} else {
 		buf.WriteString(us.Name)
 		buf.WriteByte('.')
@@ -260,7 +260,7 @@ func (us *USL) compute() error {
 		us.Class = class
 	}
 
-	us.FullPath = relPath(us.Path)
+	us.BasePath = relPath(us.Path)
 
 	if supportedProviders.contains(us.Host) {
 		if us.Class == "" {
@@ -279,7 +279,7 @@ func (us *USL) compute() error {
 	}
 
 	if us.Name == "" {
-		us.Name = us.FullPath
+		us.Name = us.BasePath
 	}
 
 	if us.Ref != "" && us.Class != "git" {

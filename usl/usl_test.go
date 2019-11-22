@@ -102,7 +102,7 @@ func TestParse(t *testing.T) {
 					"source": "a/b",
 
 					"class":    "",
-					"fullpath": "a/b",
+					"basepath": "a/b",
 					"scheme":   "file",
 				},
 			},
@@ -111,7 +111,7 @@ func TestParse(t *testing.T) {
 					"source": "../a/b",
 
 					"class":    "",
-					"fullpath": "../a/b",
+					"basepath": "../a/b",
 					"scheme":   "file",
 				},
 			},
@@ -120,7 +120,7 @@ func TestParse(t *testing.T) {
 					"source": "a/b.git",
 
 					"class":    "git",
-					"fullpath": "a/b",
+					"basepath": "a/b",
 					"inpath":   "x",
 					"scheme":   "file",
 				},
