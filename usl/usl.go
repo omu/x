@@ -48,21 +48,7 @@ var (
 		"tgz",
 		"zip",
 	)
-
-	// classPattern
-	classPattern *regexp.Regexp
-
-	sshPattern *regexp.Regexp
-
-	refPattern *regexp.Regexp
 )
-
-func init() {
-	classPattern = regexp.MustCompile(`^(.*?)[.]` + groupPatternFromSlice("class", SupportedClasses.List) + `(/.*)?$`)
-	// sshPattern was modified from https://golang.org/src/cmd/go/vcs.go.
-	sshPattern = regexp.MustCompile(`^([a-zA-Z0-9_]+@)?([a-zA-Z0-9._-]+):(.*)$`)
-	refPattern = regexp.MustCompile(`^(.+)@([^@]*)$`)
-}
 
 // Supported should be commented
 type Supported struct {
@@ -125,60 +111,6 @@ func Parse(rawurl string) (*USL, error) {
 	return us, nil
 }
 
-func (us *USL) String() string {
-	if us.Scheme == "file" {
-		if us.Class == "" {
-			return us.Path
-		}
-
-		return us.Path + "." + us.Class
-	}
-
-	var ui string
-
-	if us.Scheme == "ssh" && us.Port == "" {
-		if us.Username != "" {
-			ui = us.Username + "@"
-		}
-
-		base := ui + us.Host
-
-		if us.Class == "" {
-			return base + ":" + us.Name
-		}
-
-		return base + ":" + us.Name + "." + us.Class
-	}
-
-	if us.Username != "" {
-		ui = us.Username
-
-		if us.Password != "" {
-			ui = ui + ":" + us.Password
-		}
-
-		ui = ui + "@"
-	}
-
-	base := us.Scheme + "://" + ui + us.Host
-
-	if us.Class == "" {
-		return base + "/" + us.FullPath
-	}
-
-	return base + "/" + us.Name + "." + us.Class
-}
-
-// Source should be commented
-func (us *USL) Source() string {
-	return us.String()
-}
-
-// ID should be commented
-func (us *USL) ID() string {
-	return ""
-}
-
 // Map should be commented
 func (us *USL) Map() (map[string]string, []string) {
 	m := map[string]string{
@@ -206,6 +138,77 @@ func (us *USL) Map() (map[string]string, []string) {
 	sort.Strings(ks)
 
 	return m, ks
+}
+
+func (us *USL) String() string {
+	var buf strings.Builder
+
+	if us.Scheme == "file" {
+		if us.Class == "" {
+			return us.Path
+		}
+
+		buf.WriteString(us.Path)
+		buf.WriteByte('.')
+		buf.WriteString(us.Class)
+
+		return buf.String()
+	}
+
+	if us.Scheme == "ssh" && us.Port == "" {
+		if us.Username != "" {
+			buf.WriteString(us.Username)
+			buf.WriteByte('@')
+		}
+
+		buf.WriteString(us.Host)
+		buf.WriteByte(':')
+		buf.WriteString(us.Name)
+
+		if us.Class != "" {
+			buf.WriteByte('.')
+			buf.WriteString(us.Class)
+		}
+
+		return buf.String()
+	}
+
+	buf.WriteString(us.Scheme)
+	buf.WriteString("://")
+
+	if us.Username != "" {
+		buf.WriteString(us.Username)
+
+		if us.Password != "" {
+			buf.WriteByte(':')
+			buf.WriteString(us.Password)
+		}
+
+		buf.WriteByte('@')
+	}
+
+	buf.WriteString(us.Host)
+	buf.WriteByte('/')
+
+	if us.Class == "" {
+		buf.WriteString(us.FullPath)
+	} else {
+		buf.WriteString(us.Name)
+		buf.WriteByte('.')
+		buf.WriteString(us.Class)
+	}
+
+	return buf.String()
+}
+
+// Source should be commented
+func (us *USL) Source() string {
+	return us.String()
+}
+
+// ID should be commented
+func (us *USL) ID() string {
+	return url.PathEscape(us.String())
 }
 
 // Private functions
@@ -332,17 +335,23 @@ func newFromURL(u *url.URL) *USL {
 	}
 }
 
+var reClass = regexp.MustCompile(
+	`^(?P<before>.*?)[.]` + groupPatternFromSlice("class", SupportedClasses.List) + `(?P<after>/.*)?$`,
+)
+
 func parseClass(path string) (string, string, string, bool) {
-	if m := classPattern.FindStringSubmatch(path); len(m) > 0 {
-		return m[1], m[2], m[3], true
+	if m, ok := namedMatches(reClass, path); ok {
+		return m["before"], m["class"], m["after"], true
 	}
 
 	return path, "", "", false
 }
 
+var reRef = regexp.MustCompile(`^(?P<before>.+)@(?P<ref>[^@]*)$`)
+
 func parseRef(path string) (string, string, bool) {
-	if m := refPattern.FindStringSubmatch(path); len(m) >= 3 {
-		return m[1], m[2], true
+	if m, ok := namedMatches(reRef, path); ok {
+		return m["before"], m["ref"], true
 	}
 
 	return path, "", false
@@ -384,11 +393,9 @@ func parseFile(_ string, match map[string]string) (*url.URL, error) {
 	}, nil
 }
 
-var reSSH *regexp.Regexp
-
-func init() {
-	reSSH = regexp.MustCompile(`^((?P<user>[a-zA-Z0-9_]+)@)?(?P<host>[a-zA-Z0-9._-]+):(?P<path>.*)$`)
-}
+var reSSH = regexp.MustCompile(
+	`^((?P<user>[a-zA-Z0-9_]+)@)?(?P<host>[a-zA-Z0-9._-]+):(?P<path>.*)$`,
+)
 
 func matchSSH(in string) (map[string]string, bool) {
 	return namedMatches(reSSH, in)
@@ -403,15 +410,9 @@ func parseSSH(in string, match map[string]string) (*url.URL, error) {
 	}, nil
 }
 
-var reSpecial *regexp.Regexp
-
-func init() {
-	reSpecial = regexp.MustCompile(
-		`^((?P<user>[a-zA-Z0-9_.-]+)@)?` +
-			groupPatternFromSlice("provider", SupportedProviders.List) +
-			`(?P<sep>[/:])` + `(?P<path>.*)?$`,
-	)
-}
+var reSpecial = regexp.MustCompile(
+	`^((?P<user>[a-zA-Z0-9_.-]+)@)?` + groupPatternFromSlice("provider", SupportedProviders.List) + `(?P<sep>[/:])` + `(?P<path>.*)?$`,
+)
 
 func matchSpecial(in string) (map[string]string, bool) {
 	return namedMatches(reSpecial, in)
