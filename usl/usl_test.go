@@ -203,7 +203,7 @@ func TestParse(t *testing.T) {
 				for ke, ve := range tc.out {
 					if va, ok := m[ke]; ok {
 						if ve != va {
-							t.Errorf("\t%40s    %-12s\tgot:  %-12s\twant: %-12s", tc.in, ke, va, ve)
+							t.Errorf("\t%40s    %-12s\twant: %-12s\tgot:  %-12s", tc.in, ke, ve, va)
 						}
 					}
 				}
