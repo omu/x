@@ -14,13 +14,11 @@ import (
 )
 
 const (
-	// FallbackScheme should be commented
-	FallbackScheme = "https"
+	fallbackScheme = "https"
 )
 
 var (
-	// SupportedSchemes should be commented
-	SupportedSchemes = NewSupported(
+	supportedSchemes = newSupported(
 		"https",
 		"http",
 		"ssh",
@@ -31,16 +29,14 @@ var (
 		"file",
 	)
 
-	// SupportedProviders should be commented
-	SupportedProviders = NewSupported(
+	supportedProviders = newSupported(
 		"bitbucket.com",
 		"github.com",
 		"gitlab.com",
 		"salsa.debian.org",
 	)
 
-	// SupportedClasses should be commented
-	SupportedClasses = NewSupported(
+	supportedClasses = newSupported(
 		"git",
 		"tar.bz2",
 		"tar.gz",
@@ -50,37 +46,32 @@ var (
 	)
 )
 
-// Supported should be commented
-type Supported struct {
-	Support map[string]struct{}
-	List    []string
+type supported struct {
+	support map[string]struct{}
+	list    []string
 }
 
-// NewSupported should be commented
-func NewSupported(items ...string) *Supported {
-	s := &Supported{
-		Support: map[string]struct{}{},
+func newSupported(items ...string) *supported {
+	s := &supported{
+		support: map[string]struct{}{},
 	}
 
 	for _, item := range items {
-		s.Support[item] = struct{}{}
-		s.List = append(s.List, item)
+		s.support[item] = struct{}{}
+		s.list = append(s.list, item)
 	}
 
 	return s
 }
 
-// Contains should be commented
-func (s *Supported) Contains(support string) bool {
-	_, ok := s.Support[support]
+func (s *supported) contains(support string) bool {
+	_, ok := s.support[support]
 
 	return ok
 }
 
 // USL should be commented
 type USL struct {
-	in string // Raw URL string
-
 	Class    string // Source class
 	Domain   string // url.URL Host without port
 	Fragment string // url.URL Fragment
@@ -94,6 +85,35 @@ type USL struct {
 	Ref      string // Git reference (i.e. branch, tag, commit)
 	Scheme   string // url.URL Scheme
 	Username string // url.Userinfo Username
+}
+
+func newFromURL(u *url.URL) *USL {
+	var username, password, domain, port string
+
+	if u.User != nil {
+		username = u.User.Username()
+		if p, ok := u.User.Password(); ok {
+			password = p
+		}
+	}
+	if u.Host != "" {
+		var err error
+		if domain, port, err = net.SplitHostPort(u.Host); err != nil {
+			domain = ""
+			port = ""
+		}
+	}
+
+	return &USL{
+		Domain:   domain,
+		Fragment: u.Fragment,
+		Host:     u.Host,
+		Password: password,
+		Path:     u.Path,
+		Port:     port,
+		Scheme:   u.Scheme,
+		Username: username,
+	}
 }
 
 // Parse should be commented
@@ -233,7 +253,7 @@ func (us *USL) compute() error {
 		us.Ref = ref
 	}
 
-	if before, class, after, ok := parseClass(us.Path); ok && SupportedClasses.Contains(class) {
+	if before, class, after, ok := parseClass(us.Path); ok && supportedClasses.contains(class) {
 		us.Path = before
 		us.Name = relPath(before)
 		us.InPath = relPath(after)
@@ -242,7 +262,7 @@ func (us *USL) compute() error {
 
 	us.FullPath = relPath(us.Path)
 
-	if SupportedProviders.Contains(us.Host) {
+	if supportedProviders.contains(us.Host) {
 		if us.Class == "" {
 			us.Class = "git"
 		}
@@ -250,7 +270,7 @@ func (us *USL) compute() error {
 		if us.Name == "" {
 			parts := strings.Split(relPath(us.Path), "/")
 			if len(parts) < 2 {
-				return fmt.Errorf("incomplete repository path %q for provider %q: %q", us.Path, us.Host, us.in)
+				return fmt.Errorf("incomplete repository path %q for provider %q", us.Path, us.Host)
 			}
 
 			us.Name = strings.Join(parts[:2], "/")
@@ -263,7 +283,7 @@ func (us *USL) compute() error {
 	}
 
 	if us.Ref != "" && us.Class != "git" {
-		return fmt.Errorf("malformed url: ref found for non git source: %q", us.in)
+		return fmt.Errorf("reference found for non git source: %q", us.Ref)
 	}
 
 	return nil
@@ -304,39 +324,8 @@ func namedMatches(re *regexp.Regexp, in string) (map[string]string, bool) {
 	return result, true
 }
 
-func newFromURL(u *url.URL) *USL {
-	var username, password, domain, port string
-
-	if u.User != nil {
-		username = u.User.Username()
-		if p, ok := u.User.Password(); ok {
-			password = p
-		}
-	}
-	if u.Host != "" {
-		var err error
-		if domain, port, err = net.SplitHostPort(u.Host); err != nil {
-			domain = ""
-			port = ""
-		}
-	}
-
-	return &USL{
-		in: u.String(),
-
-		Domain:   domain,
-		Fragment: u.Fragment,
-		Host:     u.Host,
-		Password: password,
-		Path:     u.Path,
-		Port:     port,
-		Scheme:   u.Scheme,
-		Username: username,
-	}
-}
-
 var reClass = regexp.MustCompile(
-	`^(?P<before>.*?)[.]` + groupPatternFromSlice("class", SupportedClasses.List) + `(?P<after>/.*)?$`,
+	`^(?P<before>.*?)[.]` + groupPatternFromSlice("class", supportedClasses.list) + `(?P<after>/.*)?$`,
 )
 
 func parseClass(path string) (string, string, string, bool) {
@@ -373,11 +362,11 @@ func parse(rawurl string) (*url.URL, error) {
 			return parseSSH(in, m)
 		}
 
-		in = FallbackScheme + "://" + in
+		in = fallbackScheme + "://" + in
 	} else {
 		scheme = strings.ToLower(scheme)
 
-		if !SupportedSchemes.Contains(scheme) {
+		if !supportedSchemes.contains(scheme) {
 			return nil, fmt.Errorf("unsupported scheme %q", scheme)
 		}
 	}
@@ -411,7 +400,7 @@ func parseSSH(in string, match map[string]string) (*url.URL, error) {
 }
 
 var reSpecial = regexp.MustCompile(
-	`^((?P<user>[a-zA-Z0-9_.-]+)@)?` + groupPatternFromSlice("provider", SupportedProviders.List) + `(?P<sep>[/:])` + `(?P<path>.*)?$`,
+	`^((?P<user>[a-zA-Z0-9_.-]+)@)?` + groupPatternFromSlice("provider", supportedProviders.list) + `(?P<sep>[/:])` + `(?P<path>.*)?$`,
 )
 
 func matchSpecial(in string) (map[string]string, bool) {
@@ -429,7 +418,7 @@ func parseSpecial(in string, match map[string]string) (*url.URL, error) {
 		if user == "" {
 			user = "git"
 		} else if user != "git" {
-			return nil, fmt.Errorf("user must be git where found %q", match["user"])
+			return nil, fmt.Errorf("user must be 'git' where found %q", match["user"])
 		}
 	}
 
