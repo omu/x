@@ -7,12 +7,13 @@ type testCase struct {
 	out map[string]string
 }
 
+//nolint:funlen
 func TestParse(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string][]testCase{
-		"schemeless usual": []testCase{
-			testCase{
+		"schemeless usual": {
+			{
 				"github.com/user/repo", map[string]string{
 					"source": "https://github.com/user/repo.git",
 
@@ -23,7 +24,7 @@ func TestParse(t *testing.T) {
 					"scheme": "https",
 				},
 			},
-			testCase{
+			{
 				"github.com/user/repo@unstable", map[string]string{
 					"source": "https://github.com/user/repo.git",
 
@@ -34,7 +35,7 @@ func TestParse(t *testing.T) {
 					"scheme": "https",
 				},
 			},
-			testCase{
+			{
 				"github.com/user/repo/a/b@unstable", map[string]string{
 					"source": "https://github.com/user/repo.git",
 
@@ -45,7 +46,7 @@ func TestParse(t *testing.T) {
 					"scheme": "https",
 				},
 			},
-			testCase{
+			{
 				"github.com/user/repo.git/a/b", map[string]string{
 					"source": "https://github.com/user/repo.git",
 
@@ -57,8 +58,8 @@ func TestParse(t *testing.T) {
 				},
 			},
 		},
-		"schemeless SSH": []testCase{
-			testCase{
+		"schemeless SSH": {
+			{
 				"github.com:user/repo", map[string]string{
 					"source": "git@github.com:user/repo.git",
 
@@ -70,7 +71,7 @@ func TestParse(t *testing.T) {
 					"username": "git",
 				},
 			},
-			testCase{
+			{
 				"git@github.com:user/repo", map[string]string{
 					"source": "git@github.com:user/repo.git",
 
@@ -82,7 +83,7 @@ func TestParse(t *testing.T) {
 					"username": "git",
 				},
 			},
-			testCase{
+			{
 				"user@example.com:a/b", map[string]string{
 					"source": "user@example.com:a/b",
 
@@ -96,8 +97,8 @@ func TestParse(t *testing.T) {
 				},
 			},
 		},
-		"schemeless File": []testCase{
-			testCase{
+		"schemeless File": {
+			{
 				"./a/b", map[string]string{
 					"source": "a/b",
 
@@ -106,7 +107,7 @@ func TestParse(t *testing.T) {
 					"scheme":   "file",
 				},
 			},
-			testCase{
+			{
 				"../a/b", map[string]string{
 					"source": "../a/b",
 
@@ -115,7 +116,7 @@ func TestParse(t *testing.T) {
 					"scheme":   "file",
 				},
 			},
-			testCase{
+			{
 				"./a/b.git/x", map[string]string{
 					"source": "a/b.git",
 
@@ -126,8 +127,8 @@ func TestParse(t *testing.T) {
 				},
 			},
 		},
-		"HTTPS scheme": []testCase{
-			testCase{
+		"HTTPS scheme": {
+			{
 				"https://github.com/user/repo", map[string]string{
 					"source": "https://github.com/user/repo.git",
 
@@ -139,8 +140,8 @@ func TestParse(t *testing.T) {
 				},
 			},
 		},
-		"SSH scheme": []testCase{
-			testCase{
+		"SSH scheme": {
+			{
 				"ssh://git@github.com/user/repo", map[string]string{
 					"source": "git@github.com:user/repo.git",
 
@@ -152,7 +153,7 @@ func TestParse(t *testing.T) {
 					"username": "git",
 				},
 			},
-			testCase{
+			{
 				"ssh://user:pass@example.com/a/b", map[string]string{
 					"source": "user@example.com:a/b",
 
@@ -166,7 +167,7 @@ func TestParse(t *testing.T) {
 					"username": "user",
 				},
 			},
-			testCase{
+			{
 				"ssh://user:pass@example.com:22/a/b", map[string]string{
 					"source": "ssh://user:pass@example.com:22/a/b",
 

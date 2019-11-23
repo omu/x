@@ -151,7 +151,7 @@ func (us *USL) Map() (map[string]string, []string) {
 		}
 	}
 
-	var ks []string
+	ks := make([]string, 0, len(m))
 
 	for k := range m {
 		ks = append(ks, k)
@@ -177,7 +177,7 @@ func (us *USL) String() string {
 		return buf.String()
 	}
 
-	if us.Scheme == "ssh" && us.Port == "" {
+	if us.Scheme == "ssh" && us.Port == "" { //nolint:goconst
 		if us.Username != "" {
 			buf.WriteString(us.Username)
 			buf.WriteByte('@')
@@ -266,7 +266,7 @@ func (us *USL) compute() error {
 
 	if supportedProviders.contains(us.Host) {
 		if us.Class == "" {
-			us.Class = "git"
+			us.Class = "git" //nolint:goconst
 		}
 
 		if us.Name == "" {
@@ -292,7 +292,7 @@ func (us *USL) compute() error {
 }
 
 func groupPatternFromSlice(group string, ss []string) string {
-	var escaped []string
+	escaped := make([]string, 0, len(ss))
 
 	for _, s := range ss {
 		escaped = append(escaped, regexp.QuoteMeta(s))
@@ -393,7 +393,7 @@ func matchSSH(in string) (map[string]string, bool) {
 	return namedMatches(reSSH, in)
 }
 
-func parseSSH(in string, match map[string]string) (*url.URL, error) {
+func parseSSH(_ string, match map[string]string) (*url.URL, error) {
 	return &url.URL{
 		Host:   match["host"],
 		User:   url.User(match["user"]),
@@ -403,14 +403,14 @@ func parseSSH(in string, match map[string]string) (*url.URL, error) {
 }
 
 var reSpecial = regexp.MustCompile(
-	`^((?P<user>[a-zA-Z0-9_.-]+)@)?` + groupPatternFromSlice("provider", supportedProviders.list) + `(?P<sep>[/:])` + `(?P<path>.*)?$`,
+	`^((?P<user>[a-zA-Z0-9_.-]+)@)?` + groupPatternFromSlice("provider", supportedProviders.list) + `(?P<sep>[/:])` + `(?P<path>.*)?$`, //nolint:lll
 )
 
 func matchSpecial(in string) (map[string]string, bool) {
 	return namedMatches(reSpecial, in)
 }
 
-func parseSpecial(in string, match map[string]string) (*url.URL, error) {
+func parseSpecial(_ string, match map[string]string) (*url.URL, error) {
 	user := ""
 	scheme := "https"
 

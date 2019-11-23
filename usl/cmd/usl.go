@@ -50,7 +50,7 @@ func Print(us *usl.USL, attributes ...string) {
 		}
 	}
 
-	fmt.Println(strings.Join(values[:], " "))
+	fmt.Println(strings.Join(values, " "))
 }
 
 func main() {
