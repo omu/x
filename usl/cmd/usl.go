@@ -43,6 +43,7 @@ func Print(us *usl.USL, attributes ...string) {
 	m, ks := us.Map()
 
 	var values []string
+
 	for _, attribute := range wanted(ks, attributes...) {
 		if value, ok := m[attribute]; ok {
 			values = append(values, value)

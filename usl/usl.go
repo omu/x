@@ -92,10 +92,12 @@ func newFromURL(u *url.URL) *USL {
 
 	if u.User != nil {
 		username = u.User.Username()
+
 		if p, ok := u.User.Password(); ok {
 			password = p
 		}
 	}
+
 	if u.Host != "" {
 		var err error
 		if domain, port, err = net.SplitHostPort(u.Host); err != nil {
@@ -315,6 +317,7 @@ func namedMatches(re *regexp.Regexp, in string) (map[string]string, bool) {
 	}
 
 	result := make(map[string]string)
+
 	for i, name := range re.SubexpNames() {
 		if i != 0 && name != "" {
 			result[name] = match[i]

@@ -188,6 +188,7 @@ func TestParse(t *testing.T) {
 
 	for name, ts := range tests {
 		ts := ts // https://github.com/golang/go/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables
+
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			for _, tc := range ts {
