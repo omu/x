@@ -1,0 +1,41 @@
+name: check
+on: [push, pull_request]
+
+jobs:
+  usl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.13.4'
+
+      - name: Prepare
+        run: |
+          mkdir -p ~/go/pkg/mod && touch go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Test source
+        working-directory: usl
+        run: |
+          go test
+
+      - name: Install linter
+        run: |
+          version=v1.21.0; curl -fsfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sudo sh -s -- -b /usr/local/bin $version
+
+      - name: Lint source
+        working-directory: usl
+        run: |
+          golangci-lint run
