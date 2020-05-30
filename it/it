@@ -331,7 +331,11 @@ snapshot() {
 substitute_absolute_with_relative() {
 	local absolute_path=$1 target=$2 relative_path
 
-	relative_path=$(realpath --relative-to "$PWD" "$absolute_path") || die "realpath failed with $?"
+	local here
+
+	here=$(readlink -f "$target") || die "readlink failed with $?"; here=${here%/*}
+
+	relative_path=$(realpath --relative-to "$here" "$absolute_path") || die "realpath failed with $?"
 
 	[[ -w $target ]] || die "Readonly file when fixing absolute paths: $target."
 	sed -E -i "s!$absolute_path!$relative_path!" "$target" || die "sed failed with $?"
