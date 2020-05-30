@@ -331,6 +331,8 @@ snapshot() {
 substitute_absolute_with_relative() {
 	local absolute_path=$1 target=$2 relative_path
 
+	[[ $absolute_path =~ ^/ ]] || return 0
+
 	local here
 
 	here=$(readlink -f "$target") || die "readlink failed with $?"; here=${here%/*}
@@ -345,9 +347,9 @@ fix_absolute_paths() {
 	local path=$1
 	local branch=$2
 
-	local worktree=${branch##*/} absolute_path relative_path
+	local worktree=${branch##*/} target absolute_path
 
-	local target=.git/worktrees/$worktree/gitdir
+	target=.git/worktrees/$worktree/gitdir
 	if [[ ! -f $target ]]; then
 		cry "Missing file when fixing absolute paths: $target."
 		return 1
@@ -356,7 +358,7 @@ fix_absolute_paths() {
 	absolute_path=$(<"$target")
 	substitute_absolute_with_relative "$absolute_path" "$target"
 
-	local target=$path/.git
+	target=$path/.git
 	if [[ ! -f $target ]]; then
 		cry "Missing file when fixing absolute paths: $target."
 		return 1
