@@ -1,4 +1,4 @@
-module github.com/omu/zoo/usl
+module github.com/omu/x/usl
 
 go 1.13
 

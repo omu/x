@@ -8,7 +8,7 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/crypto/ssh/terminal"
 
-	"github.com/omu/zoo/usl"
+	"github.com/omu/x/usl"
 )
 
 // Usage should be commented
