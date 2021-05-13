@@ -244,7 +244,7 @@ checkout_starting_branch() {
 
 declare -A config=(
 	[prefix_path]=_
-	[prefix_branch]=_
+	[prefix_branch]=.local/var/git
 	[branch_current]=master
 	[iteration_template]=master
 	[manual_commit]=""
