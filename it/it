@@ -130,7 +130,7 @@ declare -A sequencer
 sequencer[date]=sequence_date
 
 sequence_date() {
-	readonly date_fmt='%Y%m%d-%H%M%S-%N'
+	readonly date_fmt='%Y-%m-%d_%H-%M-%S'
 
 	iterations() {
 		iterations_unsorted
@@ -224,9 +224,7 @@ require_clean_work_tree() {
 }
 
 require_toplevel_directory() {
-	pushd "$(
-		dir=$(git rev-parse --git-dir) && dir=$(cd "$dir" && pwd)/ && echo "${dir%%/.git/*}"
-	)" >/dev/null
+	git rev-parse --show-toplevel
 }
 
 auto_commit() {
@@ -244,12 +242,12 @@ checkout_starting_branch() {
 
 declare -A config=(
 	[prefix_path]=_
-	[prefix_branch]=.local/var/git
-	[branch_current]=master
-	[iteration_template]=master
+	[prefix_branch]=_
+	[branch_current]=main
+	[iteration_template]=main
 	[manual_commit]=""
 	[auto_commit_message]=.
-	[sequence_theme]=nato
+	[sequence_theme]=date
 )
 
 declare -ag cleanup_branches=()
